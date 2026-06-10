@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beschikbaarheid Toneel 8V1</title>
+
+<!--
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  SETUP CHECKLIST — vul dit in vóór je de pagina publiceert      ║
+  ╠══════════════════════════════════════════════════════════════════╣
+  ║                                                                  ║
+  ║  STAP 1 — Firebase project aanmaken                              ║
+  ║    Ga naar https://console.firebase.google.com                   ║
+  ║    → "Add project" → geef het een naam (bijv. toneel8v1)        ║
+  ║                                                                  ║
+  ║  STAP 2 — Firestore inschakelen                                  ║
+  ║    Firebase console → Build → Firestore Database → Create        ║
+  ║    Kies "Start in test mode" (later beveiligen met rules)        ║
+  ║                                                                  ║
+  ║  STAP 3 — Authentication inschakelen                             ║
+  ║    Firebase console → Build → Authentication → Get started       ║
+  ║    Schakel "Email/Password" provider in                          ║
+  ║                                                                  ║
+  ║  STAP 4 — Gebruikers aanmaken (wachtwoorden instellen hier!)     ║
+  ║    Firebase console → Authentication → Users → Add user          ║
+  ║    ┌─────────────────────────────┬──────────────────────────┐   ║
+  ║    │ E-mail                      │ Wachtwoord (jij kiest)   │   ║
+  ║    ├─────────────────────────────┼──────────────────────────┤   ║
+  ║    │ 8v1m@toneel8v1.nl           │ <kies een wachtwoord>    │   ║
+  ║    │ admin@toneel8v1.nl          │ <kies een wachtwoord>    │   ║
+  ║    └─────────────────────────────┴──────────────────────────┘   ║
+  ║    De wachtwoorden worden NOOIT opgeslagen in dit bestand.       ║
+  ║    Ze leven uitsluitend in Firebase Authentication.              ║
+  ║                                                                  ║
+  ║  STAP 5 — Firebase config invullen (zie STAP 1 in de script)    ║
+  ║    Firebase console → Project settings → Your apps → </> Web    ║
+  ║    Kopieer de firebaseConfig en plak die hieronder               ║
+  ║                                                                  ║
+  ║  STAP 6 — Publiceren op GitHub Pages                             ║
+  ║    Zet dit bestand als index.html in je GitHub repository        ║
+  ║    → Settings → Pages → Branch: main / (root) → Save            ║
+  ║                                                                  ║
+  ╚══════════════════════════════════════════════════════════════════╝
+-->
+
+<!-- Firebase SDKs (compat — no ES module needed, works on GitHub Pages) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f4f8;--surface:#fff;--border:#dde3ed;--text:#1a202c;--muted:#64748b;
+  --accent:#5b4fcf;--accent2:#4338ca;
+  --ja:#16a34a;--ja-bg:#f0fdf4;--ja-border:#86efac;
+  --nee:#dc2626;--nee-bg:#fef2f2;--nee-border:#fca5a5;
+  --q:#d97706;--q-bg:#fffbeb;--q-border:#fcd34d;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+/* LOGIN */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 36px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,.1)}
+.login-logo{text-align:center;margin-bottom:28px}
+.login-logo-img{height:110px;width:auto;border-radius:10px;object-fit:cover;margin-bottom:12px;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.login-logo p{color:var(--muted);font-size:13px;margin-top:4px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.form-group input{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;outline:none;transition:border-color .15s}
+.form-group input:focus{border-color:var(--accent)}
+.login-btn{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;transition:background .15s}
+.login-btn:hover{background:var(--accent2)}
+#login-error{color:var(--nee);font-size:12px;margin-top:10px;min-height:18px;text-align:center}
+
+/* APP SHELL */
+#app-screen{display:none;min-height:100vh;flex-direction:column}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.topbar-brand{font-size:15px;font-weight:800;color:var(--accent2);display:flex;align-items:center;gap:10px}
+.topbar-logo{height:34px;width:auto;border-radius:6px;object-fit:cover;flex-shrink:0}
+.topbar-right{display:flex;align-items:center;gap:12px}
+#topbar-user{font-size:12px;color:var(--muted)}
+.btn-logout{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:var(--surface);font-size:12px;font-weight:600;cursor:pointer;color:var(--text)}
+.btn-logout:hover{background:#fef2f2;border-color:var(--nee-border);color:var(--nee)}
+
+/* SAVE INDICATOR */
+#save-indicator{position:fixed;bottom:20px;right:20px;background:#1a202c;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;opacity:0;transition:opacity .3s;z-index:500;pointer-events:none}
+#save-indicator.visible{opacity:1}
+
+/* TABS */
+.tab-nav{display:flex;border-bottom:1px solid var(--border);padding:0 20px;background:var(--surface);overflow-x:auto;gap:2px}
+.tab-btn{padding:12px 18px;font-size:13px;font-weight:600;color:var(--muted);background:none;border:none;border-bottom:2.5px solid transparent;cursor:pointer;white-space:nowrap;transition:all .15s}
+.tab-btn.active{color:var(--accent2);border-bottom-color:var(--accent2)}
+.tab-btn:hover:not(.active){color:var(--text)}
+.tab-pane{display:none;padding:24px 20px}
+.tab-pane.active{display:block}
+.tab-title{font-size:18px;font-weight:800;margin-bottom:18px;color:var(--text)}
+.tab-header{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.tab-header-logo{height:56px;width:auto;border-radius:8px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,.12);flex-shrink:0}
+.tab-header-text h2{font-size:18px;font-weight:800;color:var(--text);margin:0}
+.tab-header-text p{font-size:12px;color:var(--muted);margin:3px 0 0}
+
+/* AVAILABILITY TABLE */
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);background:var(--surface)}
+table.avail-table{border-collapse:collapse;min-width:100%}
+.avail-table th,.avail-table td{border:1px solid var(--border);padding:6px 8px;text-align:center;white-space:nowrap}
+.avail-table thead th{background:#f8fafc;font-size:11px;font-weight:700;color:var(--muted)}
+.name-col{text-align:left!important;font-weight:600;font-size:13px;min-width:110px;background:#f8fafc;position:sticky;left:0;z-index:2}
+.date-col{min-width:78px;font-size:11px}
+.date-label{font-size:10px;font-weight:700;color:var(--accent2)}
+.del-date-btn{background:#fef2f2;border:none;color:var(--nee);border-radius:4px;font-size:9px;padding:1px 4px;cursor:pointer;margin-top:2px}
+.del-date-btn:hover{background:var(--nee);color:#fff}
+.group-header{background:#eef0fb;color:var(--accent2);font-size:11px;font-weight:800;text-align:center;padding:5px 8px;border-bottom:2px solid var(--accent);letter-spacing:.03em}
+.group-header.blocked-group{background:#f1f5f9;color:#94a3b8;border-bottom-color:#cbd5e1}
+.avail-cell{padding:4px!important}
+.toggle-group{display:flex;gap:2px;justify-content:center}
+.tog{width:26px;height:26px;border-radius:5px;border:1.5px solid var(--border);background:#f8fafc;font-size:12px;cursor:pointer;font-weight:700;transition:all .12s;line-height:1}
+.tog:hover{transform:scale(1.1)}
+.active-ja {background:var(--ja-bg);border-color:var(--ja-border);color:var(--ja)}
+.active-nee{background:var(--nee-bg);border-color:var(--nee-border);color:var(--nee)}
+.active-q  {background:var(--q-bg);border-color:var(--q-border);color:var(--q)}
+.summary-row td{background:#f1f5f9;font-weight:800;color:var(--accent2);font-size:12px}
+.summary-cell{min-width:78px}
+.drinks-row td{background:#fffbeb;border-top:2px solid #fcd34d}
+.drinks-row .name-col{font-size:12px;font-weight:700;color:#92400e;white-space:nowrap}
+.drinks-input{width:100%;min-width:72px;padding:3px 5px;border:1.5px solid #fcd34d;border-radius:5px;font-size:11px;background:#fffef5;color:#78350f;outline:none;text-align:center}
+.drinks-input:focus{border-color:#f59e0b;background:#fff}
+.drinks-input::placeholder{color:#d97706;opacity:.7}
+.drinks-cell-blocked{color:#94a3b8;font-size:13px;text-align:center}
+/* Blocked date column */
+.date-col.is-blocked{background:#f1f5f9!important;color:#94a3b8}
+.date-col.is-blocked .date-label{color:#94a3b8}
+.avail-cell.is-blocked{background:#f8fafc!important}
+.blocked-cell{display:flex;align-items:center;justify-content:center;height:26px;font-size:16px;color:#cbd5e1;cursor:default;user-select:none}
+.summary-cell.is-blocked{color:#94a3b8}
+
+/* ADMIN TAB */
+.admin-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:560px;margin-bottom:18px}
+.admin-panel h3{font-size:14px;font-weight:700;margin-bottom:14px}
+.admin-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.admin-row select,.admin-row input[type="date"]{padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;outline:none;background:#f8fafc}
+.admin-row input[type="text"]{padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;outline:none;background:#f8fafc;flex:1;min-width:160px}
+.btn-add{padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
+.btn-add:hover{background:var(--accent2)}
+.btn-block{padding:8px 18px;background:#f59e0b;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}
+.btn-block:hover{background:#d97706}
+.btn-unblock{padding:6px 12px;background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-unblock:hover{background:#fef2f2;color:var(--nee);border-color:var(--nee-border)}
+.blocked-list{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.blocked-item{display:flex;align-items:center;gap:10px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-size:13px}
+.blocked-item-date{font-weight:700;color:#92400e;min-width:90px}
+.blocked-item-reason{flex:1;color:#78350f}
+.blocked-item-empty{font-size:12px;color:var(--muted);font-style:italic;padding:4px 0}
+.delete-list{display:flex;flex-direction:column;gap:6px}
+.delete-tab-group{margin-bottom:12px}
+.delete-tab-label{font-size:11px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.delete-item{display:flex;align-items:center;gap:10px;background:#fef2f2;border:1px solid var(--nee-border);border-radius:8px;padding:7px 12px;font-size:13px}
+.delete-item-date{font-weight:700;color:#7f1d1d;min-width:110px}
+.btn-delete-date{padding:5px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;margin-left:auto;flex-shrink:0}
+.btn-delete-date:hover{background:#b91c1c}
+
+/* CALENDAR */
+.cal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
+.cal-month{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.cal-month-title{font-size:14px;font-weight:800;color:var(--accent2);text-transform:capitalize;margin-bottom:12px;text-align:center}
+.cal-days-header{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+.cal-days-header span{text-align:center;font-size:10px;font-weight:700;color:var(--muted);padding:2px 0}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-blank{visibility:hidden}
+.cal-day{text-align:center;padding:6px 2px;border-radius:6px;font-size:13px;font-weight:500;color:var(--text)}
+.cal-event{background:var(--accent);color:#fff;cursor:pointer;font-weight:700;transition:all .12s;border-radius:6px}
+.cal-event:hover{background:var(--accent2);transform:scale(1.1)}
+.cal-event.cal-blocked{background:#cbd5e1;color:#64748b;cursor:pointer}
+.cal-event.cal-blocked:hover{background:#94a3b8;transform:scale(1.1)}
+.cal-legend{display:flex;gap:16px;align-items:center;margin-bottom:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px}
+.cal-legend-item{display:flex;align-items:center;gap:6px}
+.cal-legend-dot{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+.cal-hint{font-size:12px;color:var(--muted);font-style:italic;margin-bottom:14px}
+/* Blocked banner in modal */
+.blocked-banner{background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px}
+.blocked-banner-icon{font-size:20px;flex-shrink:0}
+.blocked-banner-text{font-size:13px;color:#78350f}
+.blocked-banner-text strong{display:block;font-size:14px;margin-bottom:3px;color:#92400e}
+
+/* DAY MODAL */
+#day-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:20px}
+.modal-box{background:var(--surface);border-radius:16px;width:100%;max-width:660px;max-height:88vh;overflow-y:auto;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+.modal-header h2{font-size:18px;font-weight:800}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:0 4px}
+.modal-close:hover{color:var(--text)}
+.modal-section{margin-bottom:18px}
+.modal-section-title{font-size:13px;font-weight:700;color:var(--accent2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em}
+.attendee-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.att-col{border-radius:8px;padding:10px}
+.att-ja {background:var(--ja-bg);border:1px solid var(--ja-border)}
+.att-nee{background:var(--nee-bg);border:1px solid var(--nee-border)}
+.att-q  {background:var(--q-bg);border:1px solid var(--q-border)}
+.att-header{font-size:11px;font-weight:700;margin-bottom:6px}
+.att-ja  .att-header{color:var(--ja)}
+.att-nee .att-header{color:var(--nee)}
+.att-q   .att-header{color:var(--q)}
+.att-name{font-size:12px;padding:2px 0;color:var(--text)}
+.modal-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.modal-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.modal-field input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;outline:none;transition:border-color .15s}
+.modal-field input:focus{border-color:var(--accent)}
+.autosave-note{font-size:11px;color:var(--muted);margin-top:10px;font-style:italic}
+
+@media(max-width:600px){
+  .attendee-grid{grid-template-columns:1fr}
+  .modal-fields{grid-template-columns:1fr}
+  .cal-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- SETUP ERROR SCREEN (only visible when Firebase config is not filled in) -->
+<div id="setup-screen" style="display:none;align-items:center;justify-content:center;min-height:100vh;background:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="background:#fff;border:1px solid #dde3ed;border-radius:16px;padding:40px 36px;width:480px;box-shadow:0 8px 32px rgba(0,0,0,.1)">
+    <div style="text-align:center;margin-bottom:20px"><img src="8V1Mlogo.jpg" alt="8V1M logo" style="height:72px;width:auto;border-radius:8px;object-fit:cover"></div>
+    <h2 style="color:#dc2626;font-size:18px;font-weight:800;margin-bottom:8px">&#9888; Firebase niet geconfigureerd</h2>
+    <p style="color:#64748b;font-size:13px;margin-bottom:20px">De Firebase-instellingen zijn nog niet ingevuld. Volg de onderstaande stappen om de app werkend te maken.</p>
+    <ol style="color:#1a202c;font-size:13px;line-height:2;padding-left:18px">
+      <li>Maak een project aan op <a href="https://console.firebase.google.com" target="_blank" style="color:#4338ca">console.firebase.google.com</a></li>
+      <li>Schakel <strong>Firestore Database</strong> in (Build → Firestore)</li>
+      <li>Schakel <strong>Email/Password Authentication</strong> in (Build → Authentication)</li>
+      <li>Maak twee gebruikers aan:<br>
+        <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">8v1m@toneel8v1.nl</code> en
+        <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px">admin@toneel8v1.nl</code><br>
+        <span style="color:#64748b;font-size:12px">Kies zelf de wachtwoorden in de Firebase console — ze worden nooit in dit bestand opgeslagen.</span>
+      </li>
+      <li>Kopieer jouw <strong>firebaseConfig</strong> (Project settings → Web app) en plak die in dit HTML-bestand bij <em>STAP 1</em></li>
+    </ol>
+    <p style="margin-top:20px;font-size:12px;color:#64748b">Bekijk ook de uitgebreide instructies bovenaan dit bestand (in de HTML-commentaar).</p>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="8V1Mlogo.jpg" alt="8V1M logo" class="login-logo-img">
+      <p>Beschikbaarheid seizoen 2026–2027</p>
+    </div>
+    <div class="form-group">
+      <label>Gebruikersnaam</label>
+      <input id="login-user" type="text" placeholder="8V1M of admin" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Wachtwoord</label>
+      <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button id="login-btn" class="login-btn">Inloggen</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <img src="8V1Mlogo.jpg" alt="8V1M" class="topbar-logo">
+      Toneel 8V1 — Beschikbaarheid
+    </div>
+    <div class="topbar-right">
+      <span id="topbar-user"></span>
+      <button id="logout-btn" class="btn-logout">Uitloggen</button>
+    </div>
+  </div>
+
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="regulier">Reguliere repetities</button>
+    <button class="tab-btn" data-tab="weekend">Weekenddagen</button>
+    <button class="tab-btn" data-tab="voorstellingen">Voorstellingsdagen</button>
+    <button class="tab-btn" data-tab="kalender">📅 Kalender</button>
+    <button class="tab-btn" data-tab="admin" id="admin-tab-btn" style="display:none">⚙️ Admin</button>
+  </div>
+
+  <div id="tab-regulier" class="tab-pane active"><p style="color:var(--muted)">Laden…</p></div>
+  <div id="tab-weekend" class="tab-pane"><p style="color:var(--muted)">Laden…</p></div>
+  <div id="tab-voorstellingen" class="tab-pane"><p style="color:var(--muted)">Laden…</p></div>
+  <div id="tab-kalender" class="tab-pane">
+    <div class="tab-header">
+      <img src="8V1Mlogo.jpg" alt="8V1M" class="tab-header-logo">
+      <div class="tab-header-text"><h2>Kalender 2026–2027</h2><p>Klik op een gekleurde datum voor details, aanwezigheid en het dagprogramma.</p></div>
+    </div>
+    <div class="cal-legend">
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--accent)"></div> Geplande datum</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#cbd5e1"></div> Geblokkeerde datum</div>
+    </div>
+    <div id="cal-content"></div>
+  </div>
+
+  <div id="tab-admin" class="tab-pane">
+    <div class="tab-header">
+      <img src="8V1Mlogo.jpg" alt="8V1M" class="tab-header-logo">
+      <div class="tab-header-text"><h2>Admin</h2><p>Datums toevoegen en blokkeren</p></div>
+    </div>
+
+    <!-- Panel 1: add date -->
+    <div class="admin-panel">
+      <h3>Datum toevoegen aan een tab</h3>
+      <div class="admin-row">
+        <select id="admin-tab-select">
+          <option value="regulier">Reguliere repetities</option>
+          <option value="weekend">Weekenddagen</option>
+          <option value="voorstellingen">Voorstellingsdagen</option>
+        </select>
+        <input type="date" id="admin-date-input" min="2026-09-01" max="2027-05-31">
+        <button id="admin-add-btn" class="btn-add">Toevoegen</button>
+      </div>
+    </div>
+
+    <!-- Panel 2: block date -->
+    <div class="admin-panel">
+      <h3>Datum blokkeren (grijs zetten voor alle tabs)</h3>
+      <div class="admin-row">
+        <input type="date" id="block-date-input" min="2026-09-01" max="2027-05-31">
+        <input type="text" id="block-reason-input" placeholder="Reden (bijv. Zaal niet beschikbaar)">
+        <button id="admin-block-btn" class="btn-block">Blokkeren</button>
+      </div>
+      <div class="blocked-list" id="blocked-list">
+        <p class="blocked-item-empty">Geen geblokkeerde datums.</p>
+      </div>
+    </div>
+    <!-- Panel 3: delete date -->
+    <div class="admin-panel">
+      <h3>Datum verwijderen uit een tab</h3>
+      <div id="delete-list"></div>
+    </div>
+  </div>
+<div id="day-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="modal-date-title"></h2>
+      <button id="modal-close-btn" class="modal-close">×</button>
+    </div>
+    <div id="modal-blocked-banner" style="display:none" class="blocked-banner">
+      <div class="blocked-banner-icon">🚫</div>
+      <div class="blocked-banner-text">
+        <strong>Deze datum is geblokkeerd</strong>
+        <span id="modal-blocked-reason"></span>
+      </div>
+    </div>
+    <div id="modal-attendees"></div>
+    <div id="modal-edit-fields">
+      <div class="modal-fields">
+        <div class="modal-field">
+          <label>📋 Onderwerp van de dag</label>
+          <input id="modal-subject" type="text" placeholder="Wat staat er op het programma?">
+        </div>
+        <div class="modal-field">
+          <label>🍹 Drankjes &amp; Hapjes</label>
+          <input id="modal-drinks" type="text" placeholder="Naam van wie dit verzorgt">
+        </div>
+      </div>
+      <p class="autosave-note">Wijzigingen worden automatisch opgeslagen.</p>
+    </div>
+    <input type="hidden" id="modal-date-key">
+  </div>
+</div>
+
+<div id="save-indicator">✓ Opgeslagen</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  STAP 1 — Plak hier jouw Firebase config (van de Firebase console)
+//  Ga naar: Firebase console → Project settings → Your apps → </>
+// ═══════════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey:            "AIzaSyAZ5XOPcu267veGJSwEYYyCW1up1_zFlDk",
+  authDomain:        "toneel-308c4.firebaseapp.com",
+  projectId:         "toneel-308c4",
+  storageBucket:     "toneel-308c4.firebasestorage.app",
+  messagingSenderId: "1004081053341",
+  appId:             "1:1004081053341:web:429900bbc7b0180ece9e74"
+};
+// ═══════════════════════════════════════════════════════════════════
+
+// ── SETUP GUARD ──────────────────────────────────────────────────
+// If any config value is still a placeholder, show the setup screen
+// instead of crashing with an unhelpful Firebase error.
+const _configComplete = Object.values(firebaseConfig).every(v => !v.startsWith("REPLACE_"));
+if (!_configComplete) {
+  document.getElementById("setup-screen").style.display = "flex";
+  document.getElementById("login-screen").style.display = "none";
+  throw new Error("Firebase config is not configured. See setup instructions in the HTML comments.");
+}
+// ─────────────────────────────────────────────────────────────────
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ── USER MAP: username → Firebase email ──────────────────────────
+const USER_MAP = {
+  "8V1M":  "8v1m@toneel8v1.nl",
+  "admin": "admin@toneel8v1.nl"
+};
+
+// ── STATIC DATA ──────────────────────────────────────────────────
+const NAMES = ["Rutger","Joke","Marie Jose","Michel","Erik","Manuela","Sonja","Nicole","Ilse","Jacolien","Melissa","Koen","Harm","Jan"];
+
+const TABS_DEF = {
+  regulier: {
+    label: "Reguliere repetities",
+    dates: [
+      "2026-09-03","2026-09-10","2026-09-17","2026-09-24",
+      "2026-10-01","2026-10-08","2026-10-15","2026-10-22","2026-10-29",
+      "2026-11-05","2026-11-12","2026-11-19","2026-11-26",
+      "2026-12-03","2026-12-10","2026-12-17",
+      "2027-01-07","2027-01-14","2027-01-21","2027-01-28",
+      "2027-02-04","2027-02-11","2027-02-18","2027-02-25",
+      "2027-03-04","2027-03-11","2027-03-18","2027-03-25",
+      "2027-04-01","2027-04-08","2027-04-15","2027-04-22","2027-04-29"
+    ],
+    groups: null
+  },
+  weekend: {
+    label: "Weekenddagen",
+    dates: [
+      "2027-03-06","2027-03-07","2027-03-13","2027-03-14",
+      "2027-03-20","2027-03-21","2027-03-28","2027-03-29",
+      "2027-04-03","2027-04-04"
+    ],
+    groups: [
+      { label: "Weekend 1",  dates: ["2027-03-06","2027-03-07"] },
+      { label: "Weekend 2",  dates: ["2027-03-13","2027-03-14"] },
+      { label: "Weekend 3",  dates: ["2027-03-20","2027-03-21"] },
+      { label: "Weekend 4",  dates: ["2027-03-28","2027-03-29"] },
+      { label: "Weekend 5",  dates: ["2027-04-03","2027-04-04"] }
+    ]
+  },
+  voorstellingen: {
+    label: "Voorstellingsdagen",
+    dates: [
+      "2027-04-16","2027-04-17","2027-04-18",
+      "2027-04-23","2027-04-24","2027-04-25",
+      "2027-04-30","2027-05-01","2027-05-02"
+    ],
+    groups: [
+      { label: "16 / 17 / 18 april",       dates: ["2027-04-16","2027-04-17","2027-04-18"] },
+      { label: "23 / 24 / 25 april",       dates: ["2027-04-23","2027-04-24","2027-04-25"] },
+      { label: "30 april / 1 / 2 mei",     dates: ["2027-04-30","2027-05-01","2027-05-02"] }
+    ]
+  }
+};
+
+// ── STATE ────────────────────────────────────────────────────────
+let isAdmin      = false;
+let appData      = {};
+let eventData    = {};
+let blockedDates = {};   // { "2027-03-06": "Reden" }
+let saveTimers   = {};
+let unsubscribes = [];
+
+// ── AUTH ─────────────────────────────────────────────────────────
+document.getElementById("login-btn").addEventListener("click", doLogin);
+document.getElementById("login-pass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+document.getElementById("login-user").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+document.getElementById("logout-btn").addEventListener("click", doLogout);
+function doLogin() {
+  const u = document.getElementById("login-user").value.trim();
+  const p = document.getElementById("login-pass").value;
+  document.getElementById("login-error").textContent = "";
+
+  const email = USER_MAP[u];
+  if (!email) {
+    document.getElementById("login-error").textContent = "Onbekende gebruikersnaam. Gebruik '8V1M' of 'admin'.";
+    return;
+  }
+  auth.signInWithEmailAndPassword(email, p)
+    .catch(() => {
+      document.getElementById("login-error").textContent = "Inloggen mislukt. Controleer je wachtwoord.";
+    });
+}
+
+function doLogout() {
+  unsubscribes.forEach(u => u());
+  unsubscribes = [];
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(async user => {
+  if (user) {
+    isAdmin = user.email.startsWith("admin@");
+    document.getElementById("login-screen").style.display  = "none";
+    document.getElementById("app-screen").style.display    = "block";
+    document.getElementById("topbar-user").textContent     = isAdmin ? "admin" : "8V1M";
+    document.getElementById("admin-tab-btn").style.display = isAdmin ? "" : "none";
+    await loadData();
+    renderAll();
+  } else {
+    document.getElementById("login-screen").style.display = "flex";
+    document.getElementById("app-screen").style.display   = "none";
+    document.getElementById("login-pass").value = "";
+  }
+});
+
+// ── FIRESTORE ────────────────────────────────────────────────────
+async function loadData() {
+  const availSnap = await db.collection("availability").doc("data").get();
+  appData = availSnap.exists ? availSnap.data() : {};
+
+  // Fill in defaults for all static dates
+  Object.keys(TABS_DEF).forEach(tabKey => {
+    if (!appData[tabKey]) appData[tabKey] = {};
+    TABS_DEF[tabKey].dates.forEach(d => {
+      if (!appData[tabKey][d]) appData[tabKey][d] = {};
+      NAMES.forEach(n => { if (!appData[tabKey][d][n]) appData[tabKey][d][n] = "?"; });
+    });
+  });
+
+  const evSnap = await db.collection("events").doc("data").get();
+  eventData = evSnap.exists ? evSnap.data() : {};
+
+  const blSnap = await db.collection("blocked").doc("data").get();
+  blockedDates = blSnap.exists ? blSnap.data() : {};
+
+  // Real-time listeners
+  const u1 = db.collection("availability").doc("data").onSnapshot(snap => {
+    if (!snap.exists) return;
+    const fresh = snap.data();
+    let structuralChange = false;
+    Object.keys(fresh).forEach(tabKey => {
+      if (!appData[tabKey]) appData[tabKey] = {};
+      Object.keys(fresh[tabKey]).forEach(d => {
+        if (!appData[tabKey][d]) appData[tabKey][d] = {};
+        Object.keys(fresh[tabKey][d]).forEach(name => {
+          const newVal = fresh[tabKey][d][name];
+          if (appData[tabKey][d][name] !== newVal) {
+            appData[tabKey][d][name] = newVal;
+            // Find the container and update in-place if it exists in the DOM
+            const container = document.getElementById(`tab-${tabKey}`);
+            if (container) {
+              const ni = NAMES.indexOf(name);
+              if (ni >= 0) updateToggleCell(container, tabKey, d, String(ni), newVal);
+            }
+          }
+        });
+      });
+      // Detect if a new date was added that we don't have a column for yet
+      const def = TABS_DEF[tabKey];
+      if (def) {
+        const knownDates = new Set([...def.dates, ...Object.keys(appData[tabKey])]);
+        Object.keys(fresh[tabKey]).forEach(d => { if (!knownDates.has(d)) structuralChange = true; });
+      }
+    });
+    if (structuralChange) renderAll();
+    else renderCalendar();
+  });
+
+  const u2 = db.collection("events").doc("data").onSnapshot(snap => {
+    if (snap.exists) {
+      eventData = snap.data();
+      // Update only the drinks inputs in-place, no full re-render
+      ["regulier","weekend","voorstellingen"].forEach(tabKey => {
+        const container = document.getElementById(`tab-${tabKey}`);
+        if (!container) return;
+        container.querySelectorAll(".drinks-input").forEach(input => {
+          // Only update if the input is not currently focused (don't interrupt typing)
+          if (document.activeElement !== input) {
+            input.value = eventData[input.dataset.date]?.drinks || "";
+          }
+        });
+      });
+      renderCalendar();
+    }
+  });
+
+  const u3 = db.collection("blocked").doc("data").onSnapshot(snap => {
+    blockedDates = snap.exists ? snap.data() : {};
+    renderAll();
+    renderBlockedList();
+  });
+
+  unsubscribes.push(u1, u2, u3);
+}
+
+function getVal(tabKey, date, name) {
+  return appData?.[tabKey]?.[date]?.[name] ?? "?";
+}
+
+function scheduleSave(key, fn) {
+  clearTimeout(saveTimers[key]);
+  saveTimers[key] = setTimeout(fn, 800);
+}
+
+function saveAvailability(tabKey, date, name, value) {
+  if (!appData[tabKey]) appData[tabKey] = {};
+  if (!appData[tabKey][date]) appData[tabKey][date] = {};
+  appData[tabKey][date][name] = value;
+
+  scheduleSave(`${tabKey}|${date}|${name}`, () => {
+    db.collection("availability").doc("data")
+      .set({ [tabKey]: { [date]: { [name]: value } } }, { merge: true })
+      .then(flashSaved)
+      .catch(e => console.error("Save error", e));
+  });
+}
+
+function saveEventField(date, field, value) {
+  if (!eventData[date]) eventData[date] = {};
+  eventData[date][field] = value;
+
+  scheduleSave(`event|${date}|${field}`, () => {
+    db.collection("events").doc("data")
+      .set({ [date]: { [field]: value } }, { merge: true })
+      .then(flashSaved)
+      .catch(e => console.error("Event save error", e));
+  });
+}
+
+function flashSaved() {
+  const el = document.getElementById("save-indicator");
+  el.classList.add("visible");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("visible"), 1800);
+}
+
+// ── ADMIN ────────────────────────────────────────────────────────
+document.getElementById("admin-add-btn").addEventListener("click", addDate);
+document.getElementById("admin-block-btn").addEventListener("click", blockDate);
+
+function addDate() {
+  const tabKey = document.getElementById("admin-tab-select").value;
+  const date   = document.getElementById("admin-date-input").value;
+  if (!date) { alert("Kies een datum."); return; }
+  if (appData[tabKey] && appData[tabKey][date]) { alert("Datum bestaat al."); return; }
+  if (!appData[tabKey]) appData[tabKey] = {};
+  appData[tabKey][date] = {};
+  NAMES.forEach(n => appData[tabKey][date][n] = "?");
+  if (!TABS_DEF[tabKey].dates.includes(date)) TABS_DEF[tabKey].dates.push(date);
+  TABS_DEF[tabKey].dates.sort();
+  db.collection("availability").doc("data")
+    .set({ [tabKey]: { [date]: appData[tabKey][date] } }, { merge: true });
+  document.getElementById("admin-date-input").value = "";
+  renderAll();
+}
+
+function blockDate() {
+  const date   = document.getElementById("block-date-input").value;
+  const reason = document.getElementById("block-reason-input").value.trim() || "Geen reden opgegeven";
+  if (!date) { alert("Kies een datum om te blokkeren."); return; }
+  blockedDates[date] = reason;
+  db.collection("blocked").doc("data")
+    .set({ [date]: reason }, { merge: true })
+    .then(flashSaved);
+  document.getElementById("block-date-input").value  = "";
+  document.getElementById("block-reason-input").value = "";
+  renderAll();
+  renderBlockedList();
+}
+
+function unblockDate(date) {
+  if (!confirm(`Blokkering van ${fmtDate(date)} opheffen?`)) return;
+  delete blockedDates[date];
+  // Firestore: remove by setting entire document without this key
+  db.collection("blocked").doc("data").set(blockedDates)
+    .then(flashSaved);
+  renderAll();
+  renderBlockedList();
+}
+
+function renderBlockedList() {
+  const list = document.getElementById("blocked-list");
+  if (!list) return;
+  const entries = Object.entries(blockedDates).sort(([a],[b]) => a.localeCompare(b));
+  if (!entries.length) {
+    list.innerHTML = `<p class="blocked-item-empty">Geen geblokkeerde datums.</p>`;
+    return;
+  }
+  list.innerHTML = entries.map(([date, reason]) => `
+    <div class="blocked-item">
+      <span class="blocked-item-date">${dayName(date)} ${fmtDate(date)}</span>
+      <span class="blocked-item-reason">${reason}</span>
+      <button class="btn-unblock" data-date="${date}">Opheffen</button>
+    </div>`).join("");
+  list.querySelectorAll(".btn-unblock").forEach(btn =>
+    btn.addEventListener("click", () => unblockDate(btn.dataset.date))
+  );
+}
+
+function renderDeleteList() {
+  const container = document.getElementById("delete-list");
+  if (!container) return;
+  let html = `<div class="delete-list">`;
+  let anyDate = false;
+  Object.entries(TABS_DEF).forEach(([tabKey, tabDef]) => {
+    const dates = [...new Set([
+      ...tabDef.dates,
+      ...Object.keys(appData[tabKey] || {})
+    ])].sort();
+    if (!dates.length) return;
+    anyDate = true;
+    html += `<div class="delete-tab-group">
+      <div class="delete-tab-label">${tabDef.label}</div>`;
+    dates.forEach(d => {
+      html += `<div class="delete-item">
+        <span class="delete-item-date">${dayName(d)} ${fmtDate(d)}</span>
+        <button class="btn-delete-date" data-tab="${tabKey}" data-date="${d}">Verwijderen</button>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  if (!anyDate) html += `<p class="blocked-item-empty">Geen datums gevonden.</p>`;
+  html += `</div>`;
+  container.innerHTML = html;
+  container.querySelectorAll(".btn-delete-date").forEach(btn => {
+    btn.addEventListener("click", () => removeDate(btn.dataset.tab, btn.dataset.date));
+  });
+}
+
+function removeDate(tabKey, date) {
+  if (!confirm(`Datum ${fmtDate(date)} verwijderen uit ${TABS_DEF[tabKey]?.label ?? tabKey}?\n\nAlle ingevulde beschikbaarheid voor deze datum wordt ook verwijderd.`)) return;
+  delete appData[tabKey][date];
+  const idx = TABS_DEF[tabKey]?.dates.indexOf(date);
+  if (idx > -1) TABS_DEF[tabKey].dates.splice(idx, 1);
+  db.collection("availability").doc("data")
+    .set({ [tabKey]: appData[tabKey] }, { merge: true })
+    .then(flashSaved);
+  renderAll();
+}
+
+// Update a single toggle cell and its summary count without re-rendering the whole tab
+function updateToggleCell(container, tabKey, date, ni, newVal) {
+  // Flip active class on the three buttons for this cell only
+  container.querySelectorAll(`.tog[data-date="${date}"][data-ni="${ni}"]`).forEach(btn => {
+    btn.classList.remove("active-ja", "active-nee", "active-q");
+    if (btn.dataset.val === newVal) {
+      btn.classList.add(newVal === "ja" ? "active-ja" : newVal === "nee" ? "active-nee" : "active-q");
+    }
+  });
+
+  // Refresh the summary count for this date
+  const summaryCell = container.querySelector(`tr.summary-row td[data-date="${date}"]`);
+  if (summaryCell && !summaryCell.classList.contains("is-blocked")) {
+    summaryCell.textContent = NAMES.filter(n => getVal(tabKey, date, n) === "ja").length;
+  }
+}
+
+// ── RENDER ───────────────────────────────────────────────────────
+function renderAll() {
+  renderTab("regulier");
+  renderTab("weekend");
+  renderTab("voorstellingen");
+  renderCalendar();
+  if (isAdmin) { renderBlockedList(); renderDeleteList(); }
+}
+
+function fmtDate(iso) {
+  const [y,m,d] = iso.split("-");
+  return `${d}-${m}-${y}`;
+}
+
+function dayName(iso) {
+  return ["zo","ma","di","wo","do","vr","za"][new Date(iso + "T12:00:00").getDay()];
+}
+
+function renderTab(tabKey) {
+  const container = document.getElementById(`tab-${tabKey}`);
+  if (!container) return;
+  const def = TABS_DEF[tabKey];
+
+  // All dates: static + any admin-added ones from Firestore
+  const allDates = [...new Set([
+    ...def.dates,
+    ...Object.keys(appData[tabKey] || {})
+  ])].sort();
+
+  // Build column groups: use tab groups if defined, otherwise one flat group
+  const groups = def.groups
+    ? def.groups.map(g => ({
+        label: g.label,
+        dates: [...new Set([...g.dates, ...allDates.filter(d => g.dates.includes(d))])]
+      }))
+    : [{ label: null, dates: allDates }];
+
+  // Add any admin-added dates that don't belong to a known group
+  if (def.groups) {
+    const knownDates = new Set(def.groups.flatMap(g => g.dates));
+    const extra = allDates.filter(d => !knownDates.has(d));
+    if (extra.length) groups.push({ label: "Extra data", dates: extra });
+  }
+
+  const hasGroups = def.groups && def.groups.length > 0;
+
+  let html = `<div class="tab-header">
+    <img src="8V1Mlogo.jpg" alt="8V1M" class="tab-header-logo">
+    <div class="tab-header-text"><h2>${def.label}</h2><p>Seizoen 2026–2027</p></div>
+  </div><div class="table-wrap"><table class="avail-table"><thead>`;
+
+  // Group header row (only for grouped tabs)
+  if (hasGroups) {
+    html += `<tr><th class="name-col"></th>`;
+    groups.forEach(g => {
+      html += `<th class="group-header" colspan="${g.dates.length}">${g.label || ""}</th>`;
+    });
+    html += `</tr>`;
+  }
+
+  // Date header row
+  html += `<tr><th class="name-col">Naam</th>`;
+  groups.forEach(g => {
+    g.dates.forEach(d => {
+      const isBlocked = !!blockedDates[d];
+      html += `<th class="date-col${isBlocked?" is-blocked":""}" data-date="${d}">${dayName(d)}<br><span class="date-label">${fmtDate(d)}</span>`;
+      if (isBlocked) html += `<br><span style="font-size:9px;color:#94a3b8">🚫 geblokkeerd</span>`;
+      if (isAdmin) html += `<br><button class="del-date-btn" data-tab="${tabKey}" data-date="${d}">✕</button>`;
+      html += `</th>`;
+    });
+  });
+  html += `</tr></thead><tbody>`;
+
+  // One row per person
+  NAMES.forEach((name, ni) => {
+    html += `<tr><td class="name-col">${name}</td>`;
+    groups.forEach(g => {
+      g.dates.forEach(d => {
+        const isBlocked = !!blockedDates[d];
+        if (isBlocked) {
+          html += `<td class="avail-cell is-blocked"><div class="blocked-cell" title="${blockedDates[d]}">—</div></td>`;
+        } else {
+          const v = getVal(tabKey, d, name);
+          html += `<td class="avail-cell"><div class="toggle-group">
+            <button class="tog ${v==="ja" ?"active-ja" :""}" data-tab="${tabKey}" data-date="${d}" data-ni="${ni}" data-val="ja">✓</button>
+            <button class="tog ${v==="nee"?"active-nee":""}" data-tab="${tabKey}" data-date="${d}" data-ni="${ni}" data-val="nee">✗</button>
+            <button class="tog ${v==="?"  ?"active-q"  :""}" data-tab="${tabKey}" data-date="${d}" data-ni="${ni}" data-val="?">?</button>
+          </div></td>`;
+        }
+      });
+    });
+    html += `</tr>`;
+  });
+
+  // Summary row
+  html += `<tr class="summary-row"><td class="name-col">Aanwezig</td>`;
+  groups.forEach(g => {
+    g.dates.forEach(d => {
+      const isBlocked = !!blockedDates[d];
+      html += `<td class="summary-cell${isBlocked?" is-blocked":""}" data-date="${d}">${isBlocked ? "—" : NAMES.filter(n => getVal(tabKey, d, n) === "ja").length}</td>`;
+    });
+  });
+  html += `</tr>`;
+
+  // Drankjes & Hapjes row
+  html += `<tr class="drinks-row"><td class="name-col">🍹 Drankjes &amp; Hapjes</td>`;
+  groups.forEach(g => {
+    g.dates.forEach(d => {
+      const isBlocked = !!blockedDates[d];
+      if (isBlocked) {
+        html += `<td><div class="drinks-cell-blocked">—</div></td>`;
+      } else {
+        const val = eventData[d]?.drinks || "";
+        html += `<td style="padding:4px"><input class="drinks-input" type="text" data-date="${d}" value="${val.replace(/"/g,'&quot;')}" placeholder="Naam…"></td>`;
+      }
+    });
+  });
+  html += `</tr></tbody></table></div>`;
+  container.innerHTML = html;
+
+  // Toggle listeners — use NAMES[ni] to avoid any HTML-encoding issues with names
+  container.querySelectorAll(".tog").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const { tab, date, ni, val } = btn.dataset;
+      saveAvailability(tab, date, NAMES[+ni], val);
+      // Update only the affected cell in-place to avoid scroll reset
+      updateToggleCell(container, tab, date, ni, val);
+      renderCalendar();
+    });
+  });
+
+  // Drankjes & Hapjes inline inputs — auto-save and sync to calendar modal
+  container.querySelectorAll(".drinks-input").forEach(input => {
+    input.addEventListener("input", () => {
+      saveEventField(input.dataset.date, "drinks", input.value);
+    });
+  });
+
+  if (isAdmin) {
+    container.querySelectorAll(".del-date-btn").forEach(btn => {
+      btn.addEventListener("click", () => removeDate(btn.dataset.tab, btn.dataset.date));
+    });
+  }
+}
+
+// ── CALENDAR ────────────────────────────────────────────────────
+const MONTHS = [
+  {y:2026,m:9},{y:2026,m:10},{y:2026,m:11},{y:2026,m:12},
+  {y:2027,m:1},{y:2027,m:2},{y:2027,m:3},{y:2027,m:4},{y:2027,m:5}
+];
+const MONTH_NL = ["","januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+
+function isoDate(y,m,d) {
+  return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+
+function allEventDates() {
+  const set = new Set();
+  Object.values(TABS_DEF).forEach(t => t.dates.forEach(d => set.add(d)));
+  Object.keys(appData).forEach(tk => Object.keys(appData[tk]||{}).forEach(d => set.add(d)));
+  return set;
+}
+
+function renderCalendar() {
+  const eventDates = allEventDates();
+  const cal = document.getElementById("cal-content");
+  let html = `<div class="cal-grid">`;
+
+  MONTHS.forEach(({y,m}) => {
+    html += `<div class="cal-month">
+      <div class="cal-month-title">${MONTH_NL[m]} ${y}</div>
+      <div class="cal-days-header"><span>ma</span><span>di</span><span>wo</span><span>do</span><span>vr</span><span>za</span><span>zo</span></div>
+      <div class="cal-days">`;
+    const blanks = (new Date(y, m-1, 1).getDay() + 6) % 7;
+    for (let b=0; b<blanks; b++) html += `<span class="cal-blank"> </span>`;
+    const days = new Date(y, m, 0).getDate();
+    for (let d=1; d<=days; d++) {
+      const iso = isoDate(y,m,d);
+      const ev      = eventDates.has(iso);
+      const blocked = ev && !!blockedDates[iso];
+      html += `<span class="cal-day${ev?" cal-event":""}${blocked?" cal-blocked":""}" ${ev?`data-date="${iso}" title="${blocked ? "🚫 "+blockedDates[iso] : "Klik voor details"}"`:""}>${d}</span>`;
+    }
+    html += `</div></div>`;
+  });
+  html += `</div>`;
+  cal.innerHTML = html;
+
+  cal.querySelectorAll(".cal-event").forEach(el => {
+    el.addEventListener("click", () => openDayModal(el.dataset.date));
+  });
+}
+
+// ── DAY MODAL ───────────────────────────────────────────────────
+document.getElementById("modal-close-btn").addEventListener("click", closeModal);
+document.getElementById("day-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("day-modal")) closeModal();
+});
+document.getElementById("modal-subject").addEventListener("input", saveModalFields);
+document.getElementById("modal-drinks").addEventListener("input",  saveModalFields);
+
+function openDayModal(date) {
+  const ev = eventData[date] || {};
+  const isBlocked = !!blockedDates[date];
+  const tabLabels = Object.entries(TABS_DEF)
+    .filter(([k,v]) => v.dates.includes(date) || Object.keys(appData[k]||{}).includes(date))
+    .map(([,v]) => v.label);
+
+  document.getElementById("modal-date-title").textContent =
+    `${dayName(date)} ${fmtDate(date)}  —  ${tabLabels.join(", ")}`;
+
+  // Blocked banner
+  const banner = document.getElementById("modal-blocked-banner");
+  const editFields = document.getElementById("modal-edit-fields");
+  if (isBlocked) {
+    banner.style.display = "flex";
+    document.getElementById("modal-blocked-reason").textContent = blockedDates[date];
+    editFields.style.display = "none";
+  } else {
+    banner.style.display = "none";
+    editFields.style.display = "block";
+  }
+
+  let attendeeHtml = "";
+  Object.entries(TABS_DEF).forEach(([tabKey, tabDef]) => {
+    const dates = [...tabDef.dates, ...Object.keys(appData[tabKey]||{})];
+    if (!dates.includes(date)) return;
+    const ja  = NAMES.filter(n => getVal(tabKey, date, n) === "ja");
+    const nee = NAMES.filter(n => getVal(tabKey, date, n) === "nee");
+    const q   = NAMES.filter(n => getVal(tabKey, date, n) === "?");
+    attendeeHtml += `<div class="modal-section">
+      <div class="modal-section-title">${tabDef.label}</div>
+      <div class="attendee-grid">
+        <div class="att-col att-ja"><div class="att-header">✓ Aanwezig (${ja.length})</div>${ja.map(n=>`<div class="att-name">${n}</div>`).join("")}</div>
+        <div class="att-col att-nee"><div class="att-header">✗ Afwezig (${nee.length})</div>${nee.map(n=>`<div class="att-name">${n}</div>`).join("")}</div>
+        <div class="att-col att-q"><div class="att-header">? Onbekend (${q.length})</div>${q.map(n=>`<div class="att-name">${n}</div>`).join("")}</div>
+      </div></div>`;
+  });
+
+  document.getElementById("modal-attendees").innerHTML = attendeeHtml || `<p style="color:var(--muted);font-size:13px">Geen beschikbaarheidsdata voor deze datum.</p>`;
+  document.getElementById("modal-subject").value  = ev.subject || "";
+  document.getElementById("modal-drinks").value   = ev.drinks  || "";
+  document.getElementById("modal-date-key").value = date;
+  document.getElementById("day-modal").style.display = "flex";
+}
+
+function closeModal() {
+  document.getElementById("day-modal").style.display = "none";
+}
+
+function saveModalFields() {
+  const date = document.getElementById("modal-date-key").value;
+  if (!date) return;
+  saveEventField(date, "subject", document.getElementById("modal-subject").value);
+  saveEventField(date, "drinks",  document.getElementById("modal-drinks").value);
+}
+
+// ── TAB SWITCHING ────────────────────────────────────────────────
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+  });
+});
+</script>
+</body>
+</html>
